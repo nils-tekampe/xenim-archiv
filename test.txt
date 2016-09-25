@@ -1,0 +1,1 @@
+streamripper http://streams.demo.xenim.de/teststream.mp3 -d ./ -a Funkenstrahlen__ec98f37d-b73f-4a8d-8322-7028cb05b317.mp3 -m 600 > /dev/null 2>&1
