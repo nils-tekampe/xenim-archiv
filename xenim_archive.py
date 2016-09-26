@@ -1,6 +1,6 @@
-import urllib2, json
-from urllib2 import urlopen
-from urllib2 import Request
+import urllib, json
+from urllib import urlopen
+# from urllib import Request
 import sys, codecs
 import os.path
 import pickle
@@ -18,12 +18,14 @@ last_modified=''
 
 # url = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint"
 json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint"
+# json_url_epsiodes = "http://tekampe.org"
+# conn = urllib.Request.urlopen(json_url_epsiodes, timeout=30)
+# # last_modified = conn.info().getdate('last-modified')
+# print conn.headers['last-modified']
 
-conn = urllib2.Request.urlopen(json_url_epsiodes, timeout=30)
-# last_modified = conn.info().getdate('last-modified')
-print conn.headers['last-modified']
-
-response = urllib2.urlopen(json_url_epsiodes)
+response = urllib.urlopen(json_url_epsiodes)
+# print response.headers['last-modified']
+print response.info().getdate('last-modified')
 
 data = json.loads(response.read().decode("utf-8-sig"))
 
