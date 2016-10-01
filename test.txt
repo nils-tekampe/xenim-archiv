@@ -1,1 +1,1 @@
-None
+Could not find streamripper in the path. Please install streamripper and add it to the path. The call this script again. Will exit now.

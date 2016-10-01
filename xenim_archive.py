@@ -1,37 +1,59 @@
+# This little program checks the JSON API of xenim.de and looks for running streams
+# For all running episodes, the name of the corresponding Podcast is acquired and
+# the stream is saved to disk.
+# This program requires the tool streamripper to be available in the path.
+# If you have any questions, please let me know via nils@tekampe.org.
+
 import urllib, json
-from urllib import urlopen
-# from urllib import Request
 import sys, codecs
 import os.path
 import pickle
 from subprocess import call
+import os
 
+# Helper function to check for the availability of streamripper.
+# Thanks to http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
-recordings = {}
-dirname='./'
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+recordings = {} # All recordings are saved into this dict so that they are only started once
+dirname='./' # The folder where the recordings should be stored
 filename=''
-last_modified=''
+
+if which('streamripper')==None:
+    print 'Could not find streamripper in the path. Please install streamripper and add it to the path. The call this script again. Will exit now.'
+    exit (1)
 
 # if os.path.isfile('recordings.txt'):
 #     with open('recordings.txt', 'rb') as handle:
 #       recordings = pickle.loads(handle.read())
 
-# url = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint"
-json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint"
-# json_url_epsiodes = "http://tekampe.org"
-# conn = urllib.Request.urlopen(json_url_epsiodes, timeout=30)
-# # last_modified = conn.info().getdate('last-modified')
-# print conn.headers['last-modified']
+json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 
+# Open the URL
 response = urllib.urlopen(json_url_epsiodes)
-# print response.headers['last-modified']
-print response.info().getdate('last-modified')
-
 data = json.loads(response.read().decode("utf-8-sig"))
 
+# We need to replace the output function as we have unicode characters
 utf8_writer = codecs.getwriter('UTF-8')
 sys.stdout = utf8_writer(sys.stdout, errors='replace')
 
+# Parse the answer. Look for running episodes only
 for objects in data['objects']:
     if objects['status'] =='RUNNING':
         episode_title=objects['title']
@@ -41,36 +63,33 @@ for objects in data['objects']:
         for url in objects['streams']:
             epsidode_streaming_url=url['url']
             epsidode_streaming_codec=url['codec']
-            # print epsidode_streaming_url
-        json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast
+        json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
 
 # Only proceed if this recording is not yet running.
 if not (episode_id in recordings):
+    print "Found the following new podcast stream: " + json_podcast_url
+    # Adding the recording to the hashtable so that is is only started once
     recordings[episode_id]=episode_id
-
     # Looking up the podcast data that belongs to the episode
     response_podcast = urllib.urlopen(json_podcast_url)
     data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
-
     podcast_name = data_podcast['name']
 
-
-    # Building the local filename and the command for streaming
-
+    # Building the local filename and the command for ripping
     filename=podcast_name + '_' + episode_title + '_' + episode_id
     command= 'streamripper '+ epsidode_streaming_url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -m 600 > /dev/null 2>&1'
-    print command
-    call(command)
-    # call ('streamripper')
-#Saving the recordings dictionary
-with open('recordings.txt', 'wb') as handle:
-  pickle.dump(recordings, handle)
-#
-#   try:
-#     retcode = call("mycmd" + " myarg", shell=True)
-#     if retcode < 0:
-#         print >>sys.stderr, "Child was terminated by signal", -retcode
-#     else:
-#         print >>sys.stderr, "Child returned", retcode
-# except OSError as e:
-#     print >>sys.stderr, "Execution failed:", e
+    # command='sleep 100'
+
+    #Forking into a new process to start recording
+    newpid = os.fork()
+    if newpid == 0:
+        print "Will start recording now."
+        try:
+            retcode=call(command,shell=True)
+
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
+
+        #Saving the recordings dictionary so that they will be available for next start
+        with open('recordings.txt', 'wb') as handle:
+          pickle.dump(recordings, handle)
