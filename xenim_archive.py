@@ -8,13 +8,12 @@ import urllib, json
 import sys, codecs
 import os.path
 import pickle
-from subprocess import call
+from subprocess import call, PIPE, Popen
 import os
 
 # Helper function to check for the availability of streamripper.
 # Thanks to http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
 def which(program):
-    import os
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
@@ -32,7 +31,7 @@ def which(program):
     return None
 
 recordings = {} # All recordings are saved into this dict so that they are only started once
-dirname='./' # The folder where the recordings should be stored
+dirname='/Volumes/SDMemory/streams/' # The folder where the recordings should be stored
 filename=''
 
 if which('streamripper')==None:
@@ -43,8 +42,9 @@ if which('streamripper')==None:
 #     with open('recordings.txt', 'rb') as handle:
 #       recordings = pickle.loads(handle.read())
 
-json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
-
+# json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+print "Retreiving list of all episodes."
+json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 # Open the URL
 response = urllib.urlopen(json_url_epsiodes)
 data = json.loads(response.read().decode("utf-8-sig"))
@@ -54,6 +54,7 @@ utf8_writer = codecs.getwriter('UTF-8')
 sys.stdout = utf8_writer(sys.stdout, errors='replace')
 
 # Parse the answer. Look for running episodes only
+print "Filtering for running episodes"
 for objects in data['objects']:
     if objects['status'] =='RUNNING':
         episode_title=objects['title']
@@ -63,13 +64,17 @@ for objects in data['objects']:
         for url in objects['streams']:
             epsidode_streaming_url=url['url']
             epsidode_streaming_codec=url['codec']
-        json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+        # json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+        json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
 
 # Only proceed if this recording is not yet running.
 if not (episode_id in recordings):
     print "Found the following new podcast stream: " + json_podcast_url
     # Adding the recording to the hashtable so that is is only started once
     recordings[episode_id]=episode_id
+    #Saving the recordings dictionary so that they will be available for next start
+    with open('recordings.txt', 'wb') as handle:
+      pickle.dump(recordings, handle)
     # Looking up the podcast data that belongs to the episode
     response_podcast = urllib.urlopen(json_podcast_url)
     data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
@@ -77,19 +82,18 @@ if not (episode_id in recordings):
 
     # Building the local filename and the command for ripping
     filename=podcast_name + '_' + episode_title + '_' + episode_id
-    command= 'streamripper '+ epsidode_streaming_url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -m 600 > /dev/null 2>&1'
+    command= 'streamripper '+ epsidode_streaming_url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -A -m 600 > /dev/null 2>&1'
     # command='sleep 100'
+    try:
 
-    #Forking into a new process to start recording
-    newpid = os.fork()
-    if newpid == 0:
-        print "Will start recording now."
-        try:
-            retcode=call(command,shell=True)
+        process = Popen([command], stdout=PIPE, stderr=PIPE) 
+        stdout, stderr = process.communicate()
 
-        except:
-            print("Unexpected error:", sys.exc_info()[0])
-
-        #Saving the recordings dictionary so that they will be available for next start
-        with open('recordings.txt', 'wb') as handle:
-          pickle.dump(recordings, handle)
+        retcode=call(command,shell=True)
+        if retcode==0:
+            print "Sucesfully downloaded the podcast. Will now exit."
+        else:
+            print "streamripper returned with a code other than 0:"
+            print retcode
+    except:
+        print("Unexpected error:", sys.exc_info()[0])
