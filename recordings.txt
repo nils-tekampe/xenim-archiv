@@ -1,5 +1,6 @@
 (dp0
 Vec98f37d-b73f-4a8d-8322-7028cb05b317
 p1
-g1
+Vhttp://streams.demo.xenim.de/teststream.mp3
+p2
 s.
