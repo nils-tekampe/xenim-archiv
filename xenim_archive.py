@@ -33,9 +33,9 @@ def which(program):
 def record ( _url, _podcast_name, _episode_title,_episode_id):
     dirname='/Volumes/SDMemory/streams/' # The folder where the recordings should be stored
     recordings = {} # All recordings are saved into this dict so that they are only started once
-    # if os.path.isfile('recordings.txt'):
-    #     with open('recordings.txt', 'rb') as handle:
-    #       recordings = pickle.loads(handle.read())
+    if os.path.isfile('recordings.txt'):
+        with open('recordings.txt', 'rb') as handle:
+          recordings = pickle.loads(handle.read())
 
     # Only proceed if this recording is not yet running.
     if not (_episode_id in recordings):
@@ -48,7 +48,7 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
         command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -A -m 600 > /dev/null 2>&1'
-
+        print "Now executing the following command: " + command
         process = Popen([command], stdout=PIPE, stderr=PIPE, shell=True)
         stdout, stderr = process.communicate()
         print stdout
@@ -64,7 +64,7 @@ if which('streamripper')==None:
 
 # json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 print "Retreiving list of all episodes."
-json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 # Open the URL
 response = urllib.urlopen(json_url_epsiodes)
 data = json.loads(response.read().decode("utf-8-sig"))
@@ -86,7 +86,7 @@ for objects in data['objects']:
             epsidode_streaming_codec=url['codec']
         # json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
             print "Obtaining information about the podcast"
-            json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast
+            json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast
             response_podcast = urllib.urlopen(json_podcast_url)
             data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
             podcast_name = data_podcast['name']
