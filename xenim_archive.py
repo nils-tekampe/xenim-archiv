@@ -48,21 +48,11 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
         command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -A -m 600 > /dev/null 2>&1'
-        # command='sleep 100'
-        # try:
 
         process = Popen([command], stdout=PIPE, stderr=PIPE, shell=True)
         stdout, stderr = process.communicate()
-
-            # retcode=call(command,shell=True)
-        #     if retcode==0:
-        #         print "Sucesfully downloaded the podcast. Will now exit."
-        #     else:
-        #         print "streamripper returned with a code other than 0:"
-        #         print retcode
-        # except:
-        #     print("Unexpected error:", sys.exc_info()[0])
-
+        print stdout
+        print stderr
 
 ###########################
 #Main function starts here#
