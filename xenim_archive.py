@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # This little program checks the JSON API of xenim.de and looks for running streams
 # For all running episodes, the name of the corresponding Podcast is acquired and
 # the stream is saved to disk.
@@ -10,6 +13,10 @@ import os.path
 import pickle
 from subprocess import call, PIPE, Popen
 import os
+from collections import Counter
+from collections import OrderedDict
+
+
 
 # Helper function to check for the availability of streamripper.
 # Thanks to http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
@@ -31,7 +38,7 @@ def which(program):
     return None
 
 def record ( _url, _podcast_name, _episode_title,_episode_id):
-    dirname='/Volumes/SDMemory/streams/' # The folder where the recordings should be stored
+    dirname='/Users/nils/Documents/streams' # The folder where the recordings should be stored
     recordings = {} # All recordings are saved into this dict so that they are only started once
     if os.path.isfile('recordings.txt'):
         with open('recordings.txt', 'rb') as handle:
@@ -64,7 +71,7 @@ if which('streamripper')==None:
 
 # json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 print "Retreiving list of all episodes."
-json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 # Open the URL
 response = urllib.urlopen(json_url_epsiodes)
 data = json.loads(response.read().decode("utf-8-sig"))
@@ -75,20 +82,24 @@ sys.stdout = utf8_writer(sys.stdout, errors='replace')
 
 # Parse the answer. Look for running episodes only
 print "Filtering for running episodes"
-for objects in data['objects']:
-    if objects['status'] =='RUNNING':
-        episode_title=objects['title']
-        episode_id=objects['id']
-        episode_podcast=objects['podcast']
+running_streams = [stream for stream in data['objects'] if stream['status']=='RUNNING']
+print "Number of runnig streams: " +  str(len(running_streams))
 
-        for url in objects['streams']:
-            epsidode_streaming_url=url['url']
-            epsidode_streaming_codec=url['codec']
-        # json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
-            print "Obtaining information about the podcast"
-            json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast
-            response_podcast = urllib.urlopen(json_podcast_url)
-            data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
-            podcast_name = data_podcast['name']
+#Iterate thru the running streams
+for stream in running_streams:
+    episode_podcast=stream['podcast']
+    episode_title=stream['title']
+    episode_id=stream['id']
 
-            record(_url=epsidode_streaming_url,_podcast_name=podcast_name,_episode_title=episode_title, _episode_id=episode_id)
+    urls=stream['streams']
+    epsidode_streaming_url=urls[0]['url']
+    epsidode_streaming_codec=urls[0]['codec']
+
+    json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+    # json_podcast_url='http://feeds.demo.streams.xenim.de' + episode_podcast
+    print "Obtaining information about the podcast: " + json_podcast_url
+    response_podcast = urllib.urlopen(json_podcast_url)
+    data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
+    podcast_name = data_podcast['name']
+    print "Name des zugehoerigen Podcast lautet: " + podcast_name
+    # record(_url=epsidode_streaming_url,_podcast_name=podcast_name,_episode_title=episode_title, _episode_id=episode_id)
