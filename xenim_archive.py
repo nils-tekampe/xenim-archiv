@@ -11,11 +11,8 @@ import urllib, json
 import sys, codecs
 import os.path
 import pickle
-from subprocess import call, PIPE, Popen
 import os
-from collections import Counter
-from collections import OrderedDict
-
+from subprocess import Popen, PIPE
 
 
 # Helper function to check for the availability of streamripper.
@@ -37,12 +34,13 @@ def which(program):
 
     return None
 
+#Helper function to record a stream to disk
 def record ( _url, _podcast_name, _episode_title,_episode_id):
     dirname='/Users/nils/Documents/streams' # The folder where the recordings should be stored
     recordings = {} # All recordings are saved into this dict so that they are only started once
-    if os.path.isfile('recordings.txt'):
-        with open('recordings.txt', 'rb') as handle:
-          recordings = pickle.loads(handle.read())
+    # if os.path.isfile('recordings.txt'):
+    #     with open('recordings.txt', 'rb') as handle:
+    #       recordings = pickle.loads(handle.read())
 
     # Only proceed if this recording is not yet running.
     if not (_episode_id in recordings):
@@ -54,9 +52,12 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
           pickle.dump(recordings, handle)
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
-        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -A -m 600 > /dev/null 2>&1'
+        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60 > /dev/null 2>&1'
         print "Now executing the following command: " + command
         process = Popen([command], stdout=PIPE, stderr=PIPE, shell=True)
+        process.wait()
+        print process
+        # print "test"
         stdout, stderr = process.communicate()
         print stdout
         print stderr
@@ -102,4 +103,4 @@ for stream in running_streams:
     data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
     podcast_name = data_podcast['name']
     print "Name des zugehoerigen Podcast lautet: " + podcast_name
-    # record(_url=epsidode_streaming_url,_podcast_name=podcast_name,_episode_title=episode_title, _episode_id=episode_id)
+    record(_url=epsidode_streaming_url,_podcast_name=podcast_name,_episode_title=episode_title, _episode_id=episode_id)
