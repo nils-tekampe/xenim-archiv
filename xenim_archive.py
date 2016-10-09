@@ -12,7 +12,10 @@ import sys, codecs
 import os.path
 import pickle
 import os
-from subprocess import Popen, PIPE
+import time
+from subprocess import Popen, PIPE,STDOUT
+import subprocess
+from threading import Thread, Lock
 
 
 # Helper function to check for the availability of streamripper.
@@ -36,31 +39,50 @@ def which(program):
 
 #Helper function to record a stream to disk
 def record ( _url, _podcast_name, _episode_title,_episode_id):
+    print "Starting record function for " + _podcast_name
     dirname='/Users/nils/Documents/streams' # The folder where the recordings should be stored
     recordings = {} # All recordings are saved into this dict so that they are only started once
-    # if os.path.isfile('recordings.txt'):
-    #     with open('recordings.txt', 'rb') as handle:
-    #       recordings = pickle.loads(handle.read())
+    if os.path.isfile('recordings.txt'):
+        with open('recordings.txt', 'rb') as handle:
+          recordings = pickle.loads(handle.read())
 
     # Only proceed if this recording is not yet running.
+    lck = Lock()
     if not (_episode_id in recordings):
-        print "Found the following new podcast stream: " + _url
+        lck.acquire()
+        print _podcast_name + ": Found the following new podcast stream: " + _url
+        lck.release()
         # Adding the recording to the hashtable so that is is only started once
         recordings[_episode_id]=_url
         #Saving the recordings dictionary so that they will be available for next start
+        lck.acquire()
         with open('recordings.txt', 'wb') as handle:
           pickle.dump(recordings, handle)
+        lck.release()
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
-        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60 > /dev/null 2>&1'
-        print "Now executing the following command: " + command
-        process = Popen([command], stdout=PIPE, stderr=PIPE, shell=True)
+        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60'
+    #     # command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60 > /dev/null 2>&1'
+
+        lck.acquire()
+        print _podcast_name + ": Now executing the following command: " + command
+        lck.release()
+
+        process = Popen([command], stdout=PIPE, stderr=STDOUT, shell=True)
+        while True:
+            line = process.stdout.readline()
+            if len(line)==0:
+                break
+            lck.acquire()
+            sys.stdout.write(_podcast_name+": ")
+            sys.stdout.write(line)
+            lck.release()
+
         process.wait()
-        print process
-        # print "test"
-        stdout, stderr = process.communicate()
-        print stdout
-        print stderr
+        return_code = process.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, command)
+
 
 ###########################
 #Main function starts here#
@@ -70,9 +92,9 @@ if which('streamripper')==None:
     print 'Could not find streamripper in the path. Please install streamripper and add it to the path. The call this script again. Will exit now.'
     exit (1)
 
-# json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 print "Retreiving list of all episodes."
-json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+# json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
 # Open the URL
 response = urllib.urlopen(json_url_epsiodes)
 data = json.loads(response.read().decode("utf-8-sig"))
@@ -86,6 +108,8 @@ print "Filtering for running episodes"
 running_streams = [stream for stream in data['objects'] if stream['status']=='RUNNING']
 print "Number of runnig streams: " +  str(len(running_streams))
 
+# List of threads that we start
+threads=[]
 #Iterate thru the running streams
 for stream in running_streams:
     episode_podcast=stream['podcast']
@@ -96,11 +120,21 @@ for stream in running_streams:
     epsidode_streaming_url=urls[0]['url']
     epsidode_streaming_codec=urls[0]['codec']
 
-    json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+    json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
     # json_podcast_url='http://feeds.demo.streams.xenim.de' + episode_podcast
     print "Obtaining information about the podcast: " + json_podcast_url
     response_podcast = urllib.urlopen(json_podcast_url)
     data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
     podcast_name = data_podcast['name']
     print "Name des zugehoerigen Podcast lautet: " + podcast_name
-    record(_url=epsidode_streaming_url,_podcast_name=podcast_name,_episode_title=episode_title, _episode_id=episode_id)
+
+
+    t=Thread(target=record,args=(epsidode_streaming_url,podcast_name,episode_title, episode_id,))
+    threads.append(t)
+    t.start()
+
+# wait for all threads to finish
+time.sleep(25)
+for t in threads:
+    t.join()
+print "Exiting skript"
