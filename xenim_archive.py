@@ -16,6 +16,9 @@ import time
 from subprocess import Popen, PIPE,STDOUT
 import subprocess
 from threading import Thread, Lock
+import logging, logging.config
+
+logger = logging.getLogger("xenim")
 
 
 # Helper function to check for the availability of streamripper.
@@ -38,8 +41,8 @@ def which(program):
     return None
 
 #Helper function to record a stream to disk
-def record ( _url, _podcast_name, _episode_title,_episode_id):
-    print "Starting record function for " + _podcast_name
+def record ( _url, _podcast_name, _episode_title,_episode_id, _epsidode_streaming_codec):
+    logger.info( "Starting record function for " + _podcast_name)
     dirname='/Users/nils/Documents/streams' # The folder where the recordings should be stored
     recordings = {} # All recordings are saved into this dict so that they are only started once
     if os.path.isfile('/tmp/recordings.txt'):
@@ -50,8 +53,8 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
     lck = Lock()
     if not (_episode_id in recordings):
         lck.acquire()
-        print _podcast_name + ": Found the following new podcast stream: " + _url
-        print "episode_id: "+ _episode_id
+        logger.info( _podcast_name + ": Found the following new podcast stream: " + _url)
+        logger.info( "episode_id: "+ _episode_id)
         lck.release()
         # Adding the recording to the hashtable so that is is only started once
         lck.acquire()
@@ -62,11 +65,11 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
         lck.release()
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
-        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60'
+        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60'
         # command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60 > /dev/null 2>&1'
 
         lck.acquire()
-        print _podcast_name + ": Now executing the following command: " + command
+        logger.info( _podcast_name + ": Now executing the following command: " + command)
         lck.release()
 
         process = Popen([command], stdout=PIPE, stderr=STDOUT, shell=True)
@@ -85,58 +88,79 @@ def record ( _url, _podcast_name, _episode_title,_episode_id):
             raise subprocess.CalledProcessError(return_code, command)
     else:
         lck.acquire()
-        print "Skipping podcast " +_podcast_name + " as record seems already be running"
+        logger.info( "Skipping podcast " +_podcast_name + " as record seems already be running")
         lck.release()
 
 ###########################
 #Main function starts here#
 ###########################
+def main():
 
-if which('streamripper')==None:
-    print 'Could not find streamripper in the path. Please install streamripper and add it to the path. The call this script again. Will exit now.'
-    exit (1)
+    logger.setLevel(logging.INFO)
 
-print "Retreiving list of all episodes."
-# json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
-json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
-# Open the URL
-response = urllib.urlopen(json_url_epsiodes)
-data = json.loads(response.read().decode("utf-8-sig"))
+    # create the logging file handler
+    fh = logging.FileHandler("/tmp/xenim.log")
+    sh = logging.StreamHandler()
 
-# We need to replace the output function as we have unicode characters
-utf8_writer = codecs.getwriter('UTF-8')
-sys.stdout = utf8_writer(sys.stdout, errors='replace')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
 
-# Parse the answer. Look for running episodes only
-print "Filtering for running episodes"
-running_streams = [stream for stream in data['objects'] if stream['status']=='RUNNING']
-print "Number of runnig streams: " +  str(len(running_streams))
+    # add handler to logger object
+    logger.addHandler(fh)
+    logger.addHandler(sh)
 
-# List of threads that we start
-threads=[]
-#Iterate thru the running streams
-for stream in running_streams:
-    # Gettging some information on the stream
-    episode_podcast=stream['podcast']
-    episode_title=stream['title']
-    episode_id=stream['id']
-    urls=stream['streams']
-    epsidode_streaming_url=urls[0]['url']
-    epsidode_streaming_codec=urls[0]['codec']
+    logger.info("Starting xenim recording script")
 
-    json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
-    # json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast
-    print "Obtaining information about the podcast: " + json_podcast_url
-    response_podcast = urllib.urlopen(json_podcast_url)
-    data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
-    podcast_name = data_podcast['name']
-    print "Name des zugehoerigen Podcast lautet: " + podcast_name
-    t=Thread(target=record,args=(epsidode_streaming_url,podcast_name,episode_title, episode_id,))
-    threads.append(t)
-    t.start()
 
-# wait for all threads to finish
-time.sleep(25)
-for t in threads:
-    t.join()
-print "Exiting skript"
+    if which('streamripper')==None:
+        logger.error('Could not find streamripper in the path. Please install streamripper and add it to the path. The call this script again. Will exit now.')
+        exit (1)
+
+    logger.info("Retreiving list of all episodes.")
+    #json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+    json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+    # Open the URL
+    response = urllib.urlopen(json_url_epsiodes)
+    data = json.loads(response.read().decode("utf-8-sig"))
+
+    # We need to replace the output function as we have unicode characters
+    utf8_writer = codecs.getwriter('UTF-8')
+    sys.stdout = utf8_writer(sys.stdout, errors='replace')
+
+    # Parse the answer. Look for running episodes only
+    logger.info("Filtering for running episodes")
+    running_streams = [stream for stream in data['objects'] if stream['status']=='RUNNING']
+    logger.info("Number of runnig streams: " +  str(len(running_streams)))
+
+    # List of threads that we start
+    threads=[]
+    #Iterate thru the running streams
+    for stream in running_streams:
+        # Gettging some information on the stream
+        episode_podcast=stream['podcast']
+        episode_title=stream['title']
+        episode_id=stream['id']
+        urls=stream['streams']
+        epsidode_streaming_url=urls[0]['url']
+        epsidode_streaming_codec=urls[0]['codec']
+
+        json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+        #json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast
+        logger.info("Obtaining information about the podcast: " + json_podcast_url)
+        response_podcast = urllib.urlopen(json_podcast_url)
+        data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
+        podcast_name = data_podcast['name']
+        logger.info("Name des zugehoerigen Podcast lautet: " + podcast_name)
+        t=Thread(target=record,args=(epsidode_streaming_url,podcast_name,episode_title, episode_id,epsidode_streaming_codec,))
+        threads.append(t)
+        t.start()
+
+    # wait for all threads to finish
+    time.sleep(25)
+    for t in threads:
+        t.join()
+    logger.info("Exiting skript")
+
+
+if __name__ == '__main__':
+    main()
