@@ -66,7 +66,6 @@ def record ( _url, _podcast_name, _episode_title,_episode_id, _epsidode_streamin
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
         command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60'
-        # command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+epsidode_streaming_codec+ ' -c -A -m 60 > /dev/null 2>&1'
 
         lck.acquire()
         logger.info( _podcast_name + ": Now executing the following command: " + command)
