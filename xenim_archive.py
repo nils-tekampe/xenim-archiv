@@ -20,6 +20,7 @@ import logging, logging.config
 
 logger = logging.getLogger("xenim")
 
+base_url="http://feeds.streams.demo.xenim.de"
 
 # Helper function to check for the availability of streamripper.
 # Thanks to http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
@@ -65,8 +66,8 @@ def record ( _url, _podcast_name, _episode_title,_episode_id, _epsidode_streamin
         lck.release()
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
-        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60'
-
+        command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60 --codeset-filesys=UTF-8 --codeset-id3=UTF-8 --codeset-metadata=UTF-8 --codeset-relay=UTF-8'
+        #command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60'
         lck.acquire()
         logger.info( _podcast_name + ": Now executing the following command: " + command)
         lck.release()
@@ -85,6 +86,14 @@ def record ( _url, _podcast_name, _episode_title,_episode_id, _epsidode_streamin
         return_code = process.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, command)
+
+        # In this moment the ripping has finished. So we need to remove the stream from the hashtable
+        lck.acquire()
+        del recordings[_episode_id]
+        #Saving the recordings dictionary so that they will be available for next start
+        with open('/tmp/recordings.txt', 'wb') as handle:
+          pickle.dump(recordings, handle)
+        lck.release()
     else:
         lck.acquire()
         logger.info( "Skipping podcast " +_podcast_name + " as record seems already be running")
@@ -116,8 +125,8 @@ def main():
         exit (1)
 
     logger.info("Retreiving list of all episodes.")
-    #json_url_epsiodes = "http://feeds.streams.demo.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
-    json_url_epsiodes = "http://feeds.streams.xenim.de/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+
+    json_url_epsiodes = base_url+"/api/v1/episode/?list_endpoint" # The URL to receive all episodes
     # Open the URL
     response = urllib.urlopen(json_url_epsiodes)
     data = json.loads(response.read().decode("utf-8-sig"))
@@ -137,18 +146,18 @@ def main():
     for stream in running_streams:
         # Gettging some information on the stream
         episode_podcast=stream['podcast']
-        episode_title=stream['title']
+        episode_title=unicode(stream['title'])
         episode_id=stream['id']
         urls=stream['streams']
         epsidode_streaming_url=urls[0]['url']
         epsidode_streaming_codec=urls[0]['codec']
 
-        json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
-        #json_podcast_url='http://feeds.streams.demo.xenim.de' + episode_podcast
+        #json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
+        json_podcast_url=base_url + episode_podcast
         logger.info("Obtaining information about the podcast: " + json_podcast_url)
         response_podcast = urllib.urlopen(json_podcast_url)
         data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
-        podcast_name = data_podcast['name']
+        podcast_name = unicode(data_podcast['name'])
         logger.info("Name des zugehoerigen Podcast lautet: " + podcast_name)
         t=Thread(target=record,args=(epsidode_streaming_url,podcast_name,episode_title, episode_id,epsidode_streaming_codec,))
         threads.append(t)
