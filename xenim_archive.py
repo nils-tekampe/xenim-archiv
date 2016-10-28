@@ -20,7 +20,8 @@ import logging, logging.config
 
 logger = logging.getLogger("xenim")
 
-base_url="http://feeds.streams.demo.xenim.de"
+#base_url="http://feeds.streams.demo.xenim.de"
+base_url="http://feeds.streams.xenim.de"
 
 # Helper function to check for the availability of streamripper.
 # Thanks to http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
@@ -67,7 +68,7 @@ def record ( _url, _podcast_name, _episode_title,_episode_id, _epsidode_streamin
         # Building the local filename and the command for ripping
         filename=_podcast_name + '_' + _episode_title
         command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60 --codeset-filesys=UTF-8 --codeset-id3=UTF-8 --codeset-metadata=UTF-8 --codeset-relay=UTF-8'
-        #command= 'streamripper '+ _url  + ' -d '+ dirname +' -a ' + filename + '.'+_epsidode_streaming_codec+ ' -c -A -m 60'
+
         lck.acquire()
         logger.info( _podcast_name + ": Now executing the following command: " + command)
         lck.release()
@@ -126,18 +127,16 @@ def main():
 
     logger.info("Retreiving list of all episodes.")
 
-    json_url_epsiodes = base_url+"/api/v1/episode/?list_endpoint" # The URL to receive all episodes
+    json_url_epsiodes = base_url+"/api/v2/episode/?status=RUNNING" # The URL to receive all episodes
     # Open the URL
     response = urllib.urlopen(json_url_epsiodes)
     data = json.loads(response.read().decode("utf-8-sig"))
-
+    print data
     # We need to replace the output function as we have unicode characters
     utf8_writer = codecs.getwriter('UTF-8')
     sys.stdout = utf8_writer(sys.stdout, errors='replace')
 
-    # Parse the answer. Look for running episodes only
-    logger.info("Filtering for running episodes")
-    running_streams = [stream for stream in data['objects'] if stream['status']=='RUNNING']
+    running_streams = [stream for stream in data['objects']]
     logger.info("Number of runnig streams: " +  str(len(running_streams)))
 
     # List of threads that we start
@@ -147,17 +146,19 @@ def main():
         # Gettging some information on the stream
         episode_podcast=stream['podcast']
         episode_title=unicode(stream['title'])
+        if not episode_title:
+            episode_title = 'no_title'
         episode_id=stream['id']
         urls=stream['streams']
         epsidode_streaming_url=urls[0]['url']
         epsidode_streaming_codec=urls[0]['codec']
-
         #json_podcast_url='http://feeds.streams.xenim.de' + episode_podcast # This is the URL where the corresponding Podcast information can be found
         json_podcast_url=base_url + episode_podcast
         logger.info("Obtaining information about the podcast: " + json_podcast_url)
         response_podcast = urllib.urlopen(json_podcast_url)
         data_podcast = json.loads(response_podcast.read().decode("utf-8-sig"))
         podcast_name = unicode(data_podcast['name'])
+        print data_podcast
         logger.info("Name des zugehoerigen Podcast lautet: " + podcast_name)
         t=Thread(target=record,args=(epsidode_streaming_url,podcast_name,episode_title, episode_id,epsidode_streaming_codec,))
         threads.append(t)
